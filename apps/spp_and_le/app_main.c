@@ -114,12 +114,11 @@ void check_power_on_key(void)
 //u16 duty=500; u16 duty2=500; long freq=1000;  // Some BLDC drive need 1Khz
 //高电平脉宽为2ms表示满油门运转  See: https://bbs.elecfans.com/jishu_2126514_1_1.html
 
-/*
+
 void initUSB(){
     gpio_set_dieh(IO_PORT_DM, 0);gpio_set_die(IO_PORT_DM, 1);gpio_set_pull_down(IO_PORT_DM, 0);gpio_set_pull_up(IO_PORT_DM, 0);
     gpio_set_dieh(IO_PORT_DP, 0);gpio_set_die(IO_PORT_DP, 1);gpio_set_pull_down(IO_PORT_DP, 0);gpio_set_pull_up(IO_PORT_DP, 0);
 }
-*/
 
 void app_main()
 {
@@ -129,7 +128,7 @@ void app_main()
         int update = 0;
         update = update_result_deal();
     }
-    //initUSB();
+    initUSB();
 
     //printf(">>>>>>>>>>>>>>>>>app_main...\n");
 

@@ -951,8 +951,8 @@ void ble_comm_set_config_name(const char *name_p, u8 add_ext_name)
 {
     //log_info("%s\n", __FUNCTION__);
 
-    //char name_b[8]="ESC_PWM";
-    char name_b[9]="BLDC_PWM";
+    char name_b[8]="ESC_PWM";
+    //char name_b[9]="BLDC_PWM";
     ble_device_name_len = strlen(name_b);
     //ble_device_name_len = strlen(name_p);
     if (ble_device_name_len > BT_NAME_LEN_MAX) {

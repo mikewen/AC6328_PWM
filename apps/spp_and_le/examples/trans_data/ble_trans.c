@@ -82,8 +82,10 @@
 #define PWM_FREQ_ESC              50           /* Hz — standard RC ESC     */
 #define PWM_FREQ_BLDC             1000         /* Hz — BLDC direct drive   */
 
-#define ESC_US_MIN                1000         /* µs — ESC stop / arm      */
-#define ESC_US_MAX                2000         /* µs — ESC full throttle   */
+//#define ESC_US_MIN                1000         /* µs — ESC stop / arm      */
+//#define ESC_US_MAX                2000         /* µs — ESC full throttle   */
+#define ESC_US_MIN                500
+#define ESC_US_MAX                1000
 
 #define BLDC_DUTY_MIN             0            /* 0%   duty                */
 #define BLDC_DUTY_MAX             10000        /* 100% duty (0–10000)      */
@@ -336,7 +338,7 @@ static int motor_dispatch(const motor_cmd_t *cmd)
 /*******************************************************************************
  * Watchdog
  ******************************************************************************/
-
+/*
 static void pwm_watchdog(void *p)
 {
     if (trans_con_handle && (timer_get_ms() - last_cmd_time > WATCHDOG_TIMEOUT_MS)) {
@@ -344,7 +346,7 @@ static void pwm_watchdog(void *p)
         motor_stop();
     }
 }
-
+*/
 /*******************************************************************************
  * ae02 echo — notify Android with confirmed command values
  ******************************************************************************/
@@ -703,7 +705,8 @@ void bt_ble_init(void)
     trans_con_handle = 0;
 
     /* Device name reflects default mode */
-    ble_comm_set_config_name("ESC_PWM", 0);
+    //ble_comm_set_config_name("ESC_PWM", 0);
+    ble_comm_set_config_name("PWM", 0);
 
     trans_server_init();
 
@@ -714,7 +717,7 @@ void bt_ble_init(void)
     ble_module_enable(1);
 
     /* Watchdog timer: check every 200 ms */
-    sys_timer_add(NULL, pwm_watchdog, 200);
+    //sys_timer_add(NULL, pwm_watchdog, 200);
 }
 
 void bt_ble_exit(void)
