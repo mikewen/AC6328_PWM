@@ -1,61 +1,93 @@
-# IDE layout
-*.layout
+# =========================
+# Build Outputs
+# =========================
+*.bin
+*.fw
+*.hex
+*.elf
+*.axf
+*.out
 
-# Prerequisites
+# Map / Listing / Debug
+*.map
+*.lst
+*.lss
+
+# Dependency files
 *.d
+*.depend
 
 # Object files
 *.o
-*.ko
 *.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-# *.ld
-sdk.ld
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
-*.la
 *.lo
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
+# Libraries
+*.a
+*.lib
 
-# Executables
-# *.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
+# =========================
+# Temporary / Cache
+# =========================
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
+# =========================
+# IDE / Editor
+# =========================
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
-tags
-filenametags
-cscope.out
-*.bc
-*.ufw
+# VSCode
+.vscode/
+
+# Keil / MDK
+*.uvoptx
+*.uvprojx
+*.uvgui.*
+*.rpt
+
+# IAR
+*.eww
+*.ewp
+*.ewd
+*.ewt
+
+# CLion / CMake
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+
+# Eclipse
+.project
+.cproject
+.settings/
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Jieli SDK / Toolchain Specific (optional)
+# =========================
+*.pack
+*.jl
+*.cfg
+
+# Flash / Upgrade artifacts
+upgrade/
+output/
+build/
+dist/
+
+# =========================
+# Misc
+# =========================
+*.zip
+*.tar
+*.gz
