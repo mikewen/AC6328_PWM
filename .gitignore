@@ -91,3 +91,11 @@ dist/
 *.zip
 *.tar
 *.gz
+*.depend
+*.txt
+*.lst
+*.layout
+*.ld
+*.ufw
+*.bc
+*.dll
