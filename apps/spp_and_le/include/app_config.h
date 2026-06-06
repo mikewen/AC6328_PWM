@@ -17,6 +17,8 @@
 
 //#define CONFIG_DEBUG_ENABLE
 
+#define ADC 0
+
 //apps example 选择,只能选1个,要配置对应的board_config.h
 #define CONFIG_APP_SPP_LE                 1 //SPP + LE or LE's client
 #define CONFIG_APP_MULTI                  0 //蓝牙LE多连 + spp

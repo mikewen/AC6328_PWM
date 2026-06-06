@@ -91,7 +91,12 @@
 #define BLDC_DUTY_MAX             10000        /* 100% duty (0–10000)      */
 #define BLDC_DUTY_DEFAULT         500          /* 5%   safe start          */
 
-#define WATCHDOG_TIMEOUT_MS       2000         /* ms — stop if no command  */
+#define WATCHDOG_TIMEOUT_MS       500         /* ms — stop if no command  */
+/*
+#define ESC_RAMP_STEP       20      // How many µs to drop per step
+#define BLDC_RAMP_STEP      200
+#define RAMP_INTERVAL_MS    20      // How often to drop the step (e.g., every 20ms)
+*/
 
 /* ── Command bytes (Byte 0 of ae03 packet) ──────────────────────────────── */
 #define CMD_ESC_PWM               0x01
@@ -270,8 +275,10 @@ static void motor_apply_esc(u16 port_us, u16 stbd_us)
 
     log_info("ESC: port=%u stbd=%u µs\n", port_us, stbd_us);
 
-    timer_pwm_init(JL_TIMER3, IO_PORT_DM, PWM_FREQ_ESC, port_us);
-    timer_pwm_init(JL_TIMER2, IO_PORT_DP, PWM_FREQ_ESC, stbd_us);
+    //timer_pwm_init(JL_TIMER3, IO_PORT_DM, PWM_FREQ_ESC, port_us);
+    //timer_pwm_init(JL_TIMER2, IO_PORT_DP, PWM_FREQ_ESC, stbd_us);
+    set_timer_pwm_duty(JL_TIMER3, port_us);
+    set_timer_pwm_duty(JL_TIMER2, stbd_us);
 }
 
 /*
@@ -291,16 +298,118 @@ static void motor_apply_bldc(u16 port_duty, u16 stbd_duty)
 
     log_info("BLDC: port=%u%% stbd=%u%%\n", port_pct, stbd_pct);
 
-    timer_pwm_init(JL_TIMER3, IO_PORT_DM, PWM_FREQ_BLDC, port_pct);
-    timer_pwm_init(JL_TIMER2, IO_PORT_DP, PWM_FREQ_BLDC, stbd_pct);
+    //timer_pwm_init(JL_TIMER3, IO_PORT_DM, PWM_FREQ_BLDC, port_pct);
+    //timer_pwm_init(JL_TIMER2, IO_PORT_DP, PWM_FREQ_BLDC, stbd_pct);
+    set_timer_pwm_duty(JL_TIMER3, port_pct);
+    set_timer_pwm_duty(JL_TIMER2, stbd_pct);
 }
 
 /* Stop both motors — always safe regardless of mode */
-void motor_stop(void)
+
+void motor_stop(void){
+    //log_info("motor_stop\n");
+    if(motor_mode = MOTOR_MODE_ESC){
+        timer_pwm_init(JL_TIMER3, IO_PORT_DM, PWM_FREQ_ESC,  ESC_US_MIN);
+        timer_pwm_init(JL_TIMER2, IO_PORT_DP, PWM_FREQ_ESC,  ESC_US_MIN);
+    }else{
+        timer_pwm_init(JL_TIMER3, IO_PORT_DM, PWM_FREQ_BLDC,  BLDC_DUTY_MIN);
+        timer_pwm_init(JL_TIMER2, IO_PORT_DP, PWM_FREQ_BLDC,  BLDC_DUTY_MIN);
+    }
+}
+
+/*******************************************************************************
+ * Watchdog
+ ******************************************************************************/
+/*
+//static uint16_t current_motor_val = ESC_US_MIN; // Track current global throttle state
+static uint16_t current_motor_val = 0; // Track current global throttle state
+static bool is_emergency_stopping = false;
+static uint32_t last_ramp_time = 0;
+
+// Call this function inside your normal BLE command handler to update active throttle safely
+void update_motor_throttle(uint16_t target_us)
 {
-    log_info("motor_stop\n");
-    timer_pwm_init(JL_TIMER3, IO_PORT_DM, PWM_FREQ_ESC,  ESC_US_MIN);
-    timer_pwm_init(JL_TIMER2, IO_PORT_DP, PWM_FREQ_ESC,  ESC_US_MIN);
+    if (is_emergency_stopping) return; // Ignore new commands if watchdog took over
+
+    current_throttle_us = target_us;
+    timer_pwm_init(JL_TIMER3, IO_PORT_DM, PWM_FREQ_ESC, current_throttle_us);
+    timer_pwm_init(JL_TIMER2, IO_PORT_DP, PWM_FREQ_ESC, current_throttle_us);
+}
+
+// Handles the progressive ramp down
+void process_soft_stop(void)
+{
+    if (!is_emergency_stopping) return;
+
+    uint32_t now = timer_get_ms();
+    if (now - last_ramp_time >= RAMP_INTERVAL_MS) {
+        last_ramp_time = now;
+
+        if (motor_mode == MOTOR_MODE_ESC) {
+            // --- ESC MODE (Microseconds Ramp Down) ---
+            if (current_motor_val > ESC_US_MIN) {
+                if (current_motor_val - ESC_RAMP_STEP < ESC_US_MIN) {
+                    current_motor_val = ESC_US_MIN;
+                } else {
+                    current_motor_val -= ESC_RAMP_STEP;
+                }
+                log_info("ESC Ramping: %u us\n", current_motor_val);
+                timer_pwm_init(JL_TIMER3, IO_PORT_DM, PWM_FREQ_ESC, current_motor_val);
+                timer_pwm_init(JL_TIMER2, IO_PORT_DP, PWM_FREQ_ESC, current_motor_val);
+            } else {
+                is_emergency_stopping = false;
+                log_info("ESC Soft Stop Complete.\n");
+            }
+        }
+        else {
+            // --- BLDC MODE (Duty Cycle Ramp Down) ---
+            if (current_motor_val > BLDC_DUTY_MIN) {
+                if (current_motor_val - BLDC_RAMP_STEP < BLDC_DUTY_MIN) {
+                    current_motor_val = BLDC_DUTY_MIN;
+                } else {
+                    current_motor_val -= BLDC_RAMP_STEP;
+                }
+                log_info("BLDC Ramping: %u %%\n", current_motor_val);
+                timer_pwm_init(JL_TIMER3, IO_PORT_DM, PWM_FREQ_BLDC, current_motor_val);
+                timer_pwm_init(JL_TIMER2, IO_PORT_DP, PWM_FREQ_BLDC, current_motor_val);
+            } else {
+                is_emergency_stopping = false;
+                log_info("BLDC Soft Stop Complete.\n");
+            }
+        }
+    }
+}
+
+static void pwm_watchdog(void *p)
+{
+    // 1. Always execute the ongoing soft-stop ramp if active
+    process_soft_stop();
+
+    // 2. Determine if the motor is actively spinning above minimum idle
+    bool motor_is_running = false;
+    if (motor_mode == MOTOR_MODE_ESC) {
+        if (current_motor_val > ESC_US_MIN) motor_is_running = true;
+    } else {
+        if (current_motor_val > BLDC_DUTY_MIN) motor_is_running = true;
+    }
+    // 3. Trigger watchdog if the motor is spinning, we aren't already stopping,
+    //    and we have crossed the timeout threshold since the last valid command
+    //if (motor_is_running && !is_emergency_stopping && (timer_get_ms() - last_cmd_time > WATCHDOG_TIMEOUT_MS)) {
+    if (!is_emergency_stopping && (timer_get_ms() - last_cmd_time > WATCHDOG_TIMEOUT_MS)) {
+        //log_info("watchdog: no command for %ums, starting soft shutdown\n", WATCHDOG_TIMEOUT_MS);
+        is_emergency_stopping = true;
+        last_ramp_time = timer_get_ms();
+    }
+}
+*/
+
+static void pwm_watchdog(void *p)
+{
+    //if (trans_con_handle && (timer_get_ms() - last_cmd_time > WATCHDOG_TIMEOUT_MS)) {
+    if ((timer_get_ms() - last_cmd_time > WATCHDOG_TIMEOUT_MS)) {
+        log_info("watchdog: no command for %ums, stopping motors\n", WATCHDOG_TIMEOUT_MS);
+        motor_stop();
+    }
 }
 
 /*
@@ -327,6 +436,7 @@ static int motor_dispatch(const motor_cmd_t *cmd)
 
     case CMD_STOP:
         motor_stop();
+        //is_emergency_stopping = true;
         return 0;
 
     default:
@@ -335,18 +445,6 @@ static int motor_dispatch(const motor_cmd_t *cmd)
     }
 }
 
-/*******************************************************************************
- * Watchdog
- ******************************************************************************/
-/*
-static void pwm_watchdog(void *p)
-{
-    if (trans_con_handle && (timer_get_ms() - last_cmd_time > WATCHDOG_TIMEOUT_MS)) {
-        log_info("watchdog: no command for %ums, stopping motors\n", WATCHDOG_TIMEOUT_MS);
-        motor_stop();
-    }
-}
-*/
 /*******************************************************************************
  * ae02 echo — notify Android with confirmed command values
  ******************************************************************************/
@@ -404,6 +502,28 @@ static uint16_t trans_att_read_callback(
          *   A  = battery mV (ADC × 4)
          *   T  = uptime minutes
          */
+
+#if ADC
+        char temp_buf[AE10_RESP_MAX_LEN];
+        uint16_t currentSensor_mv = adc_get_voltage(AD_CH_PA9);
+
+        // Always calculate the string first
+        int len = snprintf(temp_buf, AE10_RESP_MAX_LEN, AE10_RESP_FMT, currentSensor_mv);
+        att_value_len = (uint16_t)len;
+
+        if (buffer) {
+            // Check offset to prevent memory corruption
+            if (offset < att_value_len) {
+                uint16_t bytes_to_copy = att_value_len - offset;
+                if (bytes_to_copy > buffer_size) bytes_to_copy = buffer_size;
+
+                memcpy(buffer, &temp_buf[offset], bytes_to_copy);
+                att_value_len = bytes_to_copy;
+            } else {
+                att_value_len = 0;
+            }
+        }
+#else
         if (buffer) {
             u16 vbat_mv    = adc_get_voltage(AD_CH_VBAT) * 4;
             u32 uptime_min = (timer_get_ms() / 1000) / 60;
@@ -415,6 +535,7 @@ static uint16_t trans_att_read_callback(
                 (u32)vbat_mv,
                 uptime_min);
         }
+#endif // ADC
         break;
     }
 
@@ -472,6 +593,37 @@ static int trans_att_write_callback(
         break;
     }
 
+    /*
+    case ATT_CHARACTERISTIC_ae03_01_VALUE_HANDLE: {
+        motor_cmd_t cmd;
+
+        if (parse_motor_cmd(buffer, buffer_size, &cmd) != 0) {
+            break;  // malformed packet — ignore
+        }
+
+        if (cmd.cmd != 0x03) {
+            last_cmd_time = timer_get_ms();
+            is_emergency_stopping = false;
+
+            // ONLY dispatch if it is an active driving command
+            if (motor_dispatch(&cmd) == 0) {
+                send_command_echo(&cmd);
+            }
+        } else {
+            // First time seeing the stop command, lock out dispatch and start ramp
+            if (!is_emergency_stopping) {
+                is_emergency_stopping = true;
+                last_ramp_time = timer_get_ms();
+            }
+
+            // CRITICAL: Bypass motor_dispatch entirely during a stop!
+            // Just echo the stop command back to the App so it knows we received it
+            send_command_echo(&cmd);
+        }
+        break;
+    }
+    */
+
     /* ── ae10: runtime mode switch ───────────────────────────────────────── */
     case ATT_CHARACTERISTIC_ae10_01_VALUE_HANDLE: {
         if (buffer_size < 1) break;
@@ -481,11 +633,13 @@ static int trans_att_write_callback(
         if (requested_mode == MODE_ESC) {
             motor_mode = MOTOR_MODE_ESC;
             motor_stop();
+            //is_emergency_stopping = true;
             log_info("mode → ESC\n");
 
         } else if (requested_mode == MODE_BLDC) {
             motor_mode = MOTOR_MODE_BLDC;
             motor_stop();
+            //is_emergency_stopping = true;
             log_info("mode → BLDC\n");
 
         } else {
@@ -551,6 +705,7 @@ static int trans_event_packet_handler(
         log_info("disconnected: handle=0x%04X reason=0x%02X\n",
             little_endian_read_16(packet, 0), packet[2]);
         motor_stop();
+        //is_emergency_stopping = true;
         if (trans_con_handle == little_endian_read_16(packet, 0)) {
             trans_con_handle = 0;
         }
@@ -705,8 +860,8 @@ void bt_ble_init(void)
     trans_con_handle = 0;
 
     /* Device name reflects default mode */
-    //ble_comm_set_config_name("ESC_PWM", 0);
-    ble_comm_set_config_name("PWM", 0);
+    ble_comm_set_config_name("ESC_PWM", 0);
+    //ble_comm_set_config_name("PWM", 0);
 
     trans_server_init();
 
@@ -716,8 +871,17 @@ void bt_ble_init(void)
 
     ble_module_enable(1);
 
-    /* Watchdog timer: check every 200 ms */
-    //sys_timer_add(NULL, pwm_watchdog, 200);
+    /* Watchdog timer: check every 20 ms */
+    //sys_timer_add(NULL, pwm_watchdog, RAMP_INTERVAL_MS);
+    sys_timer_add(NULL, pwm_watchdog, WATCHDOG_TIMEOUT_MS);
+
+    if(motor_mode = MOTOR_MODE_ESC){
+        timer_pwm_init(JL_TIMER3, IO_PORT_DM, PWM_FREQ_ESC,  ESC_US_MIN);
+        timer_pwm_init(JL_TIMER2, IO_PORT_DP, PWM_FREQ_ESC,  ESC_US_MIN);
+    }else{
+        timer_pwm_init(JL_TIMER3, IO_PORT_DM, PWM_FREQ_BLDC,  BLDC_DUTY_MIN);
+        timer_pwm_init(JL_TIMER2, IO_PORT_DP, PWM_FREQ_BLDC,  BLDC_DUTY_MIN);
+    }
 }
 
 void bt_ble_exit(void)

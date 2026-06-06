@@ -120,6 +120,7 @@ void initUSB(){
     gpio_set_dieh(IO_PORT_DP, 0);gpio_set_die(IO_PORT_DP, 1);gpio_set_pull_down(IO_PORT_DP, 0);gpio_set_pull_up(IO_PORT_DP, 0);
 }
 
+
 void app_main()
 {
     struct intent it;
@@ -130,6 +131,13 @@ void app_main()
     }
     initUSB();
 
+#if ADC
+#define sampleMS 100
+    gpio_set_dieh(AD_CH_PA9, 0);gpio_set_die(AD_CH_PA9, 0);gpio_set_pull_down(AD_CH_PA9, 1);gpio_set_pull_up(AD_CH_PA9, 0);
+    gpio_set_direction(AD_CH_PA9, 1);
+    adc_add_sample_ch(AD_CH_PA9);adc_set_sample_freq(AD_CH_PA9, sampleMS);
+    //u16 timerID = sys_timer_add(NULL, readCurrentADC, sampleMS); // 1Hz
+#endif
     //printf(">>>>>>>>>>>>>>>>>app_main...\n");
 
     //u32 adc_io = IO_PORTA_09; //AD_CH_PA9;
